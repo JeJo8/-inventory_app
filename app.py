@@ -59,7 +59,8 @@ def update_stock(item, new_quantity):
 # ===============================
 # UI
 # ===============================
-st.title("📦 Shop Inventory Tracker")
+st.title("📦 Esquires Aylesbury Inventory")
+st.subheader("JeJo")
 
 menu = st.sidebar.radio("Menu", ["View Inventory", "Add Item", "Update Stock", "Low Stock Report"])
 
