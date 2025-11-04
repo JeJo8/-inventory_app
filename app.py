@@ -3,44 +3,23 @@ import pandas as pd
 import os
 
 # ===============================
-# AUTHENTICATION
+# CONFIG
 # ===============================
-def check_password():
-    if "password_correct" not in st.session_state:
-        st.session_state.password_correct = False
-
-    def password_entered():
-        if st.session_state["password_input"] == st.secrets["PASSWORD"]:
-            st.session_state.password_correct = True
-            del st.session_state["password_input"]
-        else:
-            st.session_state.password_correct = False
-
-    if not st.session_state.password_correct:
-        st.text_input("Enter password:", type="password", key="password_input", on_change=password_entered)
-        st.stop()
-
-check_password()
-
-# ===============================
-# APP CONFIG
-# ===============================
-st.set_page_config(page_title="Shop Inventory Tracker", layout="wide")
+st.set_page_config(page_title="🏪 Shop Inventory App", layout="wide")
 
 DATA_FILE = "inventory.csv"
 
 # ===============================
-# INITIALIZE DATA
+# INITIALIZE INVENTORY
 # ===============================
 if not os.path.exists(DATA_FILE):
-    df = pd.DataFrame(columns=["Category","Item","Quantity","Reorder_Level"])
+    df = pd.DataFrame(columns=["Category", "Item", "Quantity", "Reorder_Level"])
     df.to_csv(DATA_FILE, index=False)
 
-# Load data
 df = pd.read_csv(DATA_FILE)
 
 # ===============================
-# FUNCTIONS
+# HELPER FUNCTIONS
 # ===============================
 def save_data(dataframe):
     dataframe.to_csv(DATA_FILE, index=False)
@@ -57,11 +36,31 @@ def update_stock(item, new_quantity):
     save_data(df)
 
 # ===============================
-# UI
+# USER ROLE SELECTION
 # ===============================
-st.title("📦 Esquires Aylesbury Inventory")
-st.subheader("JeJo")
+role = st.sidebar.radio("Select Role", ["Staff - View Only", "Admin"])
 
+if role == "Admin":
+    # Password check
+    if "password_correct" not in st.session_state:
+        st.session_state.password_correct = False
+
+    def password_entered():
+        if st.session_state["password_input"] == st.secrets["PASSWORD"]:
+            st.session_state.password_correct = True
+            del st.session_state["password_input"]
+        else:
+            st.session_state.password_correct = False
+
+    if not st.session_state.password_correct:
+        st.text_input("Enter Admin Password:", type="password", key="password_input", on_change=password_entered)
+        st.stop()
+
+st.title("🏪 Shop Inventory App")
+
+# ===============================
+# MENU
+# ===============================
 menu = st.sidebar.radio("Menu", ["View Inventory", "Add Item", "Update Stock", "Low Stock Report"])
 
 # -------------------------------
@@ -78,44 +77,47 @@ if menu == "View Inventory":
     st.dataframe(df_filtered)
 
 # -------------------------------
-# ADD ITEM
+# ADD ITEM (Admin Only)
 # -------------------------------
 elif menu == "Add Item":
-    st.subheader("Add New Item")
-    
-    # Categories selection / new category
-    categories = df["Category"].unique().tolist()
-    categories.append("Add New Category")
-    category = st.selectbox("Select Category", categories)
-    if category == "Add New Category":
-        category = st.text_input("Enter new category")
-    
-    name = st.text_input("Item Name")
-    quantity = st.number_input("Quantity", min_value=0, step=1)
-    reorder_level = st.number_input("Reorder Level", min_value=0, step=1)
-    
-    if st.button("Add Item"):
-        if name and category:
-            add_item(category, name, quantity, reorder_level)
-            st.success(f"✅ Added '{name}' under '{category}'")
-        else:
-            st.warning("Please enter both item name and category")
+    if role != "Admin":
+        st.warning("⚠️ Only Admin can add new items.")
+    else:
+        st.subheader("Add New Item")
+        categories = df["Category"].unique().tolist()
+        categories.append("Add New Category")
+        category = st.selectbox("Select Category", categories)
+        if category == "Add New Category":
+            category = st.text_input("Enter new category")
+
+        name = st.text_input("Item Name")
+        quantity = st.number_input("Quantity", min_value=0, step=1)
+        reorder_level = st.number_input("Reorder Level", min_value=0, step=1)
+
+        if st.button("Add Item"):
+            if name and category:
+                add_item(category, name, quantity, reorder_level)
+                st.success(f"✅ Added '{name}' under '{category}'")
+            else:
+                st.warning("Please enter both item name and category")
 
 # -------------------------------
-# UPDATE STOCK
+# UPDATE STOCK (Admin Only)
 # -------------------------------
 elif menu == "Update Stock":
-    st.subheader("Update Item Quantity")
-    items = df["Item"].tolist()
-    
-    if len(items) == 0:
-        st.info("No items found. Add some first.")
+    if role != "Admin":
+        st.warning("⚠️ Only Admin can update stock.")
     else:
-        item = st.selectbox("Select Item", items)
-        new_qty = st.number_input("New Quantity", min_value=0, step=1)
-        if st.button("Update Quantity"):
-            update_stock(item, new_qty)
-            st.success(f"✅ Updated '{item}' quantity to {new_qty}.")
+        st.subheader("Update Item Quantity")
+        items = df["Item"].tolist()
+        if len(items) == 0:
+            st.info("No items found. Add some first.")
+        else:
+            item = st.selectbox("Select Item", items)
+            new_qty = st.number_input("New Quantity", min_value=0, step=1)
+            if st.button("Update Quantity"):
+                update_stock(item, new_qty)
+                st.success(f"✅ Updated '{item}' quantity to {new_qty}.")
 
 # -------------------------------
 # LOW STOCK REPORT
@@ -124,12 +126,11 @@ elif menu == "Low Stock Report":
     st.subheader("⚠️ Low Stock Items")
     categories = df["Category"].unique().tolist()
     selected_category = st.selectbox("Filter by Category", ["All"] + categories)
-    
     if selected_category != "All":
         df_filtered = df[df["Category"] == selected_category]
     else:
         df_filtered = df.copy()
-    
+
     low_stock = df_filtered[df_filtered["Quantity"] <= df_filtered["Reorder_Level"]]
     if low_stock.empty:
         st.success("🎉 All items are sufficiently stocked.")
