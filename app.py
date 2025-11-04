@@ -56,8 +56,8 @@ if role == "Admin":
         st.text_input("Enter Admin Password:", type="password", key="password_input", on_change=password_entered)
         st.stop()
 
-st.title("🏪 Shop Inventory App")
-
+st.title("🏪 Esquires Aylesbury Inventory")
+st.subheader("JeJo")
 # ===============================
 # MENU
 # ===============================
