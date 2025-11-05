@@ -60,7 +60,10 @@ if role == "Admin":
     if not st.session_state.password_correct:
         st.text_input("Enter Admin Password:", type="password", key="password_input", on_change=password_entered)
         st.stop()
+from PIL import Image
 
+logo = Image.open("logo.png")
+st.image(logo, width=80)  # width in pixels
 st.title("🏪 Esquires Aylesbury Inventory")
 st.subheader("JeJo")
 # ===============================
