@@ -179,5 +179,5 @@ elif menu == "Low Stock Report":
         st.download_button("⬇️ Download Low Stock List (CSV)", data=csv_data, file_name="low_stock_items.csv")
 
         # Text area without Category, showing how much to order
-        list_text = "\n".join([f"{r.Item} → Order {r.Need_to_Order}" for r in low_stock.itertuples()])
+        list_text = "\n".join([f"{r.Item}: {r.Need_to_Order}" for r in low_stock.itertuples()])
         st.text_area("Low Stock Order List (for easy copy)", value=list_text, height=200)
