@@ -175,6 +175,6 @@ elif menu == "Low Stock Report":
         csv_data = low_stock.drop(columns=["Category"]).to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Download Low Stock List (CSV)", data=csv_data, file_name="low_stock_items.csv")
         
-        # Text area still shows Category
-        list_text = "\n".join([f"{r.Category} - {r.Item} (Qty: {r.Quantity})" for r in low_stock.itertuples()])
-        st.text_area("Low Stock List", value=list_text, height=200)
+        # Text area without Category (for easy copy-paste)
+        list_text = "\n".join([f"{r.Item} (Qty: {r.Quantity})" for r in low_stock.itertuples()])
+        st.text_area("Low Stock List (for easy copy)", value=list_text, height=200)
