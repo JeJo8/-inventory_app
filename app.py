@@ -64,7 +64,7 @@ from PIL import Image
 
 col1, col2 = st.columns([1, 4])
 with col1:
-    st.image("logo.png", width=80)
+    st.image("logo.png", width=100)
 with col2:
     st.title("Esquires Aylesbury Inventory")
 st.subheader("JeJo")
