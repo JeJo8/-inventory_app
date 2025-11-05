@@ -35,6 +35,11 @@ def update_stock(item, new_quantity):
     df.loc[df["Item"] == item, "Quantity"] = new_quantity
     save_data(df)
 
+def delete_item(item):
+    global df
+    df.drop(df[df["Item"] == item].index, inplace=True)
+    save_data(df)
+
 # ===============================
 # USER ROLE SELECTION
 # ===============================
@@ -56,12 +61,12 @@ if role == "Admin":
         st.text_input("Enter Admin Password:", type="password", key="password_input", on_change=password_entered)
         st.stop()
 
-st.title("🏪 Esquires Aylesbury Inventory")
-st.subheader("JeJo")
+st.title("🏪 Shop Inventory App")
+
 # ===============================
 # MENU
 # ===============================
-menu = st.sidebar.radio("Menu", ["View Inventory", "Add Item", "Update Stock", "Low Stock Report"])
+menu = st.sidebar.radio("Menu", ["View Inventory", "Add Item", "Update Stock", "Delete Item", "Low Stock Report"])
 
 # -------------------------------
 # VIEW INVENTORY
@@ -118,6 +123,23 @@ elif menu == "Update Stock":
             if st.button("Update Quantity"):
                 update_stock(item, new_qty)
                 st.success(f"✅ Updated '{item}' quantity to {new_qty}.")
+
+# -------------------------------
+# DELETE ITEM (Admin Only)
+# -------------------------------
+elif menu == "Delete Item":
+    if role != "Admin":
+        st.warning("⚠️ Only Admin can delete items.")
+    else:
+        st.subheader("Delete Item")
+        items = df["Item"].tolist()
+        if len(items) == 0:
+            st.info("No items found to delete.")
+        else:
+            item_to_delete = st.selectbox("Select Item to Delete", items)
+            if st.button("Delete Item"):
+                delete_item(item_to_delete)
+                st.success(f"✅ '{item_to_delete}' has been deleted.")
 
 # -------------------------------
 # LOW STOCK REPORT
