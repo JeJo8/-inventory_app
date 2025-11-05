@@ -164,12 +164,17 @@ elif menu == "Delete Item":
 elif menu == "Low Stock Report":
     st.subheader("⚠️ Low Stock Items")
     low_stock = df_filtered[df_filtered["Quantity"] <= df_filtered["Reorder_Level"]]
+    
     if low_stock.empty:
         st.success("🎉 All items are sufficiently stocked.")
     else:
+        # Table without Category
         st.dataframe(low_stock.drop(columns=["Category"]))
-        csv = low_stock.to_csv(index=False).encode("utf-8")
-        st.download_button("⬇️ Download Low Stock List (CSV)", data=csv, file_name="low_stock_items.csv")
-        # Use Category in text list for clarity
+        
+        # CSV download without Category
+        csv_data = low_stock.drop(columns=["Category"]).to_csv(index=False).encode("utf-8")
+        st.download_button("⬇️ Download Low Stock List (CSV)", data=csv_data, file_name="low_stock_items.csv")
+        
+        # Text area still shows Category
         list_text = "\n".join([f"{r.Category} - {r.Item} (Qty: {r.Quantity})" for r in low_stock.itertuples()])
         st.text_area("Low Stock List", value=list_text, height=200)
