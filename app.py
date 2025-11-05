@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+from PIL import Image
 
 # ===============================
 # CONFIG
@@ -9,6 +10,18 @@ st.set_page_config(page_title="🏪 Shop Inventory App", layout="wide")
 
 DATA_FILE = "inventory.csv"
 
+# ===============================
+# LOGO HEADER
+# ===============================
+if os.path.exists("logo.png"):
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        st.image("logo.png", width=100)
+    with col2:
+        st.title("Esquires Aylesbury Inventory")
+else:
+    st.title("Esquires Aylesbury Inventory")
+st.subheader("JeJo")
 # ===============================
 # INITIALIZE INVENTORY
 # ===============================
@@ -60,31 +73,31 @@ if role == "Admin":
     if not st.session_state.password_correct:
         st.text_input("Enter Admin Password:", type="password", key="password_input", on_change=password_entered)
         st.stop()
-from PIL import Image
 
-col1, col2 = st.columns([1, 4])
-with col1:
-    st.image("logo.png", width=100)
-with col2:
-    st.title("Esquires Aylesbury Inventory")
-st.subheader("JeJo")
 # ===============================
 # MENU
 # ===============================
 menu = st.sidebar.radio("Menu", ["View Inventory", "Add Item", "Update Stock", "Delete Item", "Low Stock Report"])
+
+# ===============================
+# CATEGORY FILTER (Top Only)
+# ===============================
+categories = df["Category"].unique().tolist()
+selected_category = st.selectbox("Filter by Category", ["All"] + categories)
+
+# Apply filter
+if selected_category != "All":
+    df_filtered = df[df["Category"] == selected_category]
+else:
+    df_filtered = df.copy()
 
 # -------------------------------
 # VIEW INVENTORY
 # -------------------------------
 if menu == "View Inventory":
     st.subheader("Current Inventory")
-    categories = df["Category"].unique().tolist()
-    selected_category = st.selectbox("Filter by Category", ["All"] + categories)
-    if selected_category != "All":
-        df_filtered = df[df["Category"] == selected_category]
-    else:
-        df_filtered = df.copy()
-    st.dataframe(df_filtered)
+    df_display = df_filtered.drop(columns=["Category"])
+    st.dataframe(df_display)
 
 # -------------------------------
 # ADD ITEM (Admin Only)
@@ -94,9 +107,8 @@ elif menu == "Add Item":
         st.warning("⚠️ Only Admin can add new items.")
     else:
         st.subheader("Add New Item")
-        categories = df["Category"].unique().tolist()
-        categories.append("Add New Category")
-        category = st.selectbox("Select Category", categories)
+        cat_options = df["Category"].unique().tolist() + ["Add New Category"]
+        category = st.selectbox("Select Category", cat_options)
         if category == "Add New Category":
             category = st.text_input("Enter new category")
 
@@ -151,19 +163,13 @@ elif menu == "Delete Item":
 # -------------------------------
 elif menu == "Low Stock Report":
     st.subheader("⚠️ Low Stock Items")
-    categories = df["Category"].unique().tolist()
-    selected_category = st.selectbox("Filter by Category", ["All"] + categories)
-    if selected_category != "All":
-        df_filtered = df[df["Category"] == selected_category]
-    else:
-        df_filtered = df.copy()
-
     low_stock = df_filtered[df_filtered["Quantity"] <= df_filtered["Reorder_Level"]]
     if low_stock.empty:
         st.success("🎉 All items are sufficiently stocked.")
     else:
-        st.dataframe(low_stock)
+        st.dataframe(low_stock.drop(columns=["Category"]))
         csv = low_stock.to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Download Low Stock List (CSV)", data=csv, file_name="low_stock_items.csv")
+        # Use Category in text list for clarity
         list_text = "\n".join([f"{r.Category} - {r.Item} (Qty: {r.Quantity})" for r in low_stock.itertuples()])
         st.text_area("Low Stock List", value=list_text, height=200)
