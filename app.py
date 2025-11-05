@@ -62,9 +62,11 @@ if role == "Admin":
         st.stop()
 from PIL import Image
 
-logo = Image.open("logo.png")
-st.image(logo, width=80)  # width in pixels
-st.title("🏪 Esquires Aylesbury Inventory")
+col1, col2 = st.columns([1, 4])
+with col1:
+    st.image("logo.png", width=80)
+with col2:
+    st.title("Esquires Aylesbury Inventory")
 st.subheader("JeJo")
 # ===============================
 # MENU
