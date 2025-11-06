@@ -4,8 +4,20 @@ from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
-st.write("Secrets available:", list(st.secrets.keys()))
-st.write("✅ Connected to:", st.secrets["SHEET_URL"])
+import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
+
+scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+credentials = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+gc = gspread.authorize(credentials)
+
+# Try to open your sheet
+spreadsheet = gc.open_by_url(st.secrets["SHEET_URL"])
+worksheet = spreadsheet.sheet1
+
+st.success("✅ Successfully connected to Google Sheet!")
+st.write("First few rows:", worksheet.get_all_records()[:3])
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Inventory App", layout="wide")
 SHOP_NAME = "Esquires Aylesbury Central"
