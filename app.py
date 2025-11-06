@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
-
+st.write("✅ Connected to:", st.secrets["SHEET_URL"])
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Inventory App", layout="wide")
 SHOP_NAME = "Esquires Aylesbury Central"
