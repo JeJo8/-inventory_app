@@ -10,7 +10,7 @@ SHOP_NAME = "Esquires Aylesbury Central"
 st.title(f"🏪 {SHOP_NAME} — Smart Inventory Management")
 
 # ---------------- AUTH ----------------
-ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
+ADMIN_PASSWORD = st.secrets["PASSWORD"]
 
 if "auth" not in st.session_state:
     st.session_state.auth = False
