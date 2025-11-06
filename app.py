@@ -1,183 +1,160 @@
 import streamlit as st
 import pandas as pd
-import os
-from PIL import Image
+from datetime import datetime
+from google.oauth2.service_account import Credentials
+from gspread_pandas import Spread, Client
 
-# ===============================
-# CONFIG
-# ===============================
-st.set_page_config(page_title="🏪 Shop Inventory App", layout="wide")
+# ---------------- CONFIG ----------------
+st.set_page_config(page_title="Inventory App v4", layout="wide")
+SHOP_NAME = "Esquires Aylesbury Central"
+st.title(f"🏪 {SHOP_NAME} — Smart Inventory Management v4")
 
-DATA_FILE = "inventory.csv"
+# ---------------- AUTH ----------------
+ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
-# ===============================
-# LOGO HEADER
-# ===============================
-if os.path.exists("logo.png"):
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        st.image("logo.png", width=100)
-    with col2:
-        st.title("Esquires Aylesbury Inventory")
+if "auth" not in st.session_state:
+    st.session_state.auth = False
+
+if not st.session_state.auth:
+    pwd = st.text_input("Enter Admin Password", type="password")
+    if st.button("Login"):
+        if pwd == ADMIN_PASSWORD:
+            st.session_state.auth = True
+            st.success("✅ Logged in successfully!")
+        else:
+            st.error("❌ Incorrect password")
+    st.stop()
+
+# ---------------- GOOGLE SHEET CONNECTION ----------------
+scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+credentials = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+client = Client(creds=credentials)
+spreadsheet_url = st.secrets["SHEET_URL"]
+spread = Spread(spreadsheet_url, client=client)
+
+# ---------------- DATA HANDLERS ----------------
+def load_inventory():
+    try:
+        df = spread.sheet_to_df(index=None)
+        if df.empty:
+            df = pd.DataFrame(columns=["Category", "Item", "Quantity", "Reorder_Level", "Unit_Price", "Supplier", "Last_Updated"])
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        df = pd.DataFrame(columns=["Category", "Item", "Quantity", "Reorder_Level", "Unit_Price", "Supplier", "Last_Updated"])
+    return df
+
+def save_inventory(df):
+    try:
+        spread.df_to_sheet(df, index=False, replace=True)
+        st.success("✅ Inventory updated and synced to Google Sheets!")
+    except Exception as e:
+        st.error(f"Error saving data: {e}")
+
+def append_restock_log(item, quantity, user):
+    log_name = "Restock_Log"
+    try:
+        log_df = spread.sheet_to_df(sheet=log_name, index=None)
+    except:
+        log_df = pd.DataFrame(columns=["Timestamp", "Item", "Quantity", "User"])
+    new_log = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), item, quantity, user]], columns=["Timestamp", "Item", "Quantity", "User"])
+    log_df = pd.concat([log_df, new_log], ignore_index=True)
+    spread.df_to_sheet(log_df, index=False, replace=True, sheet=log_name)
+
+# ---------------- LOAD DATA ----------------
+df = load_inventory()
+
+# ---------------- SIDEBAR: ADD OR UPDATE ITEM ----------------
+st.sidebar.header("➕ Add / Update Item")
+
+with st.sidebar.form("add_item_form"):
+    category = st.text_input("Category")
+    item = st.text_input("Item Name")
+    quantity = st.number_input("Quantity", min_value=0, step=1)
+    reorder = st.number_input("Reorder Level", min_value=0, step=1)
+    price = st.number_input("Unit Price (£)", min_value=0.0, step=0.1)
+    supplier = st.text_input("Supplier (optional)")
+    add_btn = st.form_submit_button("💾 Add / Update")
+
+if add_btn:
+    if item.strip() == "":
+        st.sidebar.warning("⚠️ Please enter an item name.")
+    else:
+        df["Item"] = df["Item"].astype(str)
+        existing = df[df["Item"].str.lower() == item.lower()]
+        if not existing.empty:
+            idx = existing.index[0]
+            df.at[idx, "Category"] = category
+            df.at[idx, "Quantity"] = quantity
+            df.at[idx, "Reorder_Level"] = reorder
+            df.at[idx, "Unit_Price"] = price
+            df.at[idx, "Supplier"] = supplier
+            df.at[idx, "Last_Updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            st.sidebar.info(f"🔁 Updated existing item: {item}")
+        else:
+            new_row = pd.DataFrame([[category, item, quantity, reorder, price, supplier, datetime.now().strftime("%Y-%m-%d %H:%M")]],
+                                   columns=["Category", "Item", "Quantity", "Reorder_Level", "Unit_Price", "Supplier", "Last_Updated"])
+            df = pd.concat([df, new_row], ignore_index=True)
+            st.sidebar.success(f"✅ Added new item: {item}")
+        save_inventory(df)
+        append_restock_log(item, quantity, "Admin")
+
+# ---------------- SEARCH / EDIT SECTION ----------------
+st.header("🔍 Find & Manage Items")
+
+search = st.text_input("Search by Item Name", placeholder="Type part of the item name...")
+filtered_df = df[df["Item"].str.contains(search, case=False, na=False)] if search else df.copy()
+
+if filtered_df.empty:
+    st.warning("No matching items found.")
 else:
-    st.title("Esquires Aylesbury Inventory")
-st.subheader("JeJo")
-# ===============================
-# INITIALIZE INVENTORY
-# ===============================
-if not os.path.exists(DATA_FILE):
-    df = pd.DataFrame(columns=["Category", "Item", "Quantity", "Reorder_Level"])
-    df.to_csv(DATA_FILE, index=False)
+    st.dataframe(filtered_df.style.apply(
+        lambda row: ['background-color: #ffcccc' if row.Quantity <= row.Reorder_Level else
+                     'background-color: #fff3cd' if row.Quantity <= row.Reorder_Level + 2 else
+                     '' for _ in row], axis=1))
 
-df = pd.read_csv(DATA_FILE)
+    if search and not filtered_df.empty:
+        selected_item = st.selectbox("Select Item to Update", filtered_df["Item"].tolist())
+        item_data = filtered_df[filtered_df["Item"] == selected_item].iloc[0]
+        new_qty = st.number_input("New Quantity", min_value=0, value=int(item_data["Quantity"]))
+        new_reorder = st.number_input("Reorder Level", min_value=0, value=int(item_data["Reorder_Level"]))
+        new_price = st.number_input("Unit Price (£)", min_value=0.0, value=float(item_data["Unit_Price"]) if not pd.isna(item_data["Unit_Price"]) else 0.0)
+        new_supplier = st.text_input("Supplier", value=item_data["Supplier"])
+        if st.button("💾 Save Changes"):
+            idx = df[df["Item"] == selected_item].index[0]
+            df.at[idx, "Quantity"] = new_qty
+            df.at[idx, "Reorder_Level"] = new_reorder
+            df.at[idx, "Unit_Price"] = new_price
+            df.at[idx, "Supplier"] = new_supplier
+            df.at[idx, "Last_Updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            save_inventory(df)
+            append_restock_log(selected_item, new_qty, "Admin")
 
-# ===============================
-# HELPER FUNCTIONS
-# ===============================
-def save_data(dataframe):
-    dataframe.to_csv(DATA_FILE, index=False)
+        if st.button("❌ Delete Item"):
+            df = df[df["Item"] != selected_item]
+            save_inventory(df)
+            st.warning(f"🗑️ Deleted item: {selected_item}")
 
-def add_item(category, name, quantity, reorder_level):
-    global df
-    new_row = pd.DataFrame([[category, name, quantity, reorder_level]], columns=df.columns)
-    df = pd.concat([df, new_row], ignore_index=True)
-    save_data(df)
+# ---------------- LOW STOCK ALERTS ----------------
+st.header("⚠️ Low Stock Items")
 
-def update_stock(item, new_quantity):
-    global df
-    df.loc[df["Item"] == item, "Quantity"] = new_quantity
-    save_data(df)
+df["Total_Value"] = df["Quantity"] * df["Unit_Price"]
+low_stock = df[df["Quantity"] <= df["Reorder_Level"]]
 
-def delete_item(item):
-    global df
-    df.drop(df[df["Item"] == item].index, inplace=True)
-    save_data(df)
-
-# ===============================
-# USER ROLE SELECTION
-# ===============================
-role = st.sidebar.radio("Select Role", ["Staff - View Only", "Admin"])
-
-if role == "Admin":
-    # Password check
-    if "password_correct" not in st.session_state:
-        st.session_state.password_correct = False
-
-    def password_entered():
-        if st.session_state["password_input"] == st.secrets["PASSWORD"]:
-            st.session_state.password_correct = True
-            del st.session_state["password_input"]
-        else:
-            st.session_state.password_correct = False
-
-    if not st.session_state.password_correct:
-        st.text_input("Enter Admin Password:", type="password", key="password_input", on_change=password_entered)
-        st.stop()
-
-# ===============================
-# MENU
-# ===============================
-menu = st.sidebar.radio("Menu", ["View Inventory", "Add Item", "Update Stock", "Delete Item", "Low Stock Report"])
-
-# ===============================
-# CATEGORY FILTER (Top Only)
-# ===============================
-categories = df["Category"].unique().tolist()
-selected_category = st.selectbox("Filter by Category", ["All"] + categories)
-
-# Apply filter
-if selected_category != "All":
-    df_filtered = df[df["Category"] == selected_category]
+if low_stock.empty:
+    st.success("🎉 All items sufficiently stocked!")
 else:
-    df_filtered = df.copy()
+    st.error("⚠️ Items below reorder level:")
+    st.dataframe(low_stock[["Category", "Item", "Quantity", "Reorder_Level", "Supplier"]])
+    whatsapp_message = "Low Stock Alert%0A" + "%0A".join([f"{row['Item']} - Qty: {row['Quantity']} (Reorder at {row['Reorder_Level']})" for _, row in low_stock.iterrows()])
+    st.markdown(f"[📱 Send WhatsApp Notification](https://wa.me/?text={whatsapp_message})")
 
-# -------------------------------
-# VIEW INVENTORY
-# -------------------------------
-if menu == "View Inventory":
-    st.subheader("Current Inventory")
-    df_display = df_filtered.drop(columns=["Category"])
-    st.dataframe(df_display)
+# ---------------- REPORTS ----------------
+st.header("📊 Inventory Summary")
 
-# -------------------------------
-# ADD ITEM (Admin Only)
-# -------------------------------
-elif menu == "Add Item":
-    if role != "Admin":
-        st.warning("⚠️ Only Admin can add new items.")
-    else:
-        st.subheader("Add New Item")
-        cat_options = df["Category"].unique().tolist() + ["Add New Category"]
-        category = st.selectbox("Select Category", cat_options)
-        if category == "Add New Category":
-            category = st.text_input("Enter new category")
+if not df.empty:
+    total_items = len(df)
+    total_value = df["Total_Value"].sum()
+    st.metric("Total Items", total_items)
+    st.metric("Total Stock Value (£)", f"{total_value:,.2f}")
 
-        name = st.text_input("Item Name")
-        quantity = st.number_input("Quantity", min_value=0, step=1)
-        reorder_level = st.number_input("Reorder Level", min_value=0, step=1)
-
-        if st.button("Add Item"):
-            if name and category:
-                add_item(category, name, quantity, reorder_level)
-                st.success(f"✅ Added '{name}' under '{category}'")
-            else:
-                st.warning("Please enter both item name and category")
-
-# -------------------------------
-# UPDATE STOCK (Admin Only)
-# -------------------------------
-elif menu == "Update Stock":
-    if role != "Admin":
-        st.warning("⚠️ Only Admin can update stock.")
-    else:
-        st.subheader("Update Item Quantity")
-        items = df["Item"].tolist()
-        if len(items) == 0:
-            st.info("No items found. Add some first.")
-        else:
-            item = st.selectbox("Select Item", items)
-            new_qty = st.number_input("New Quantity", min_value=0, step=1)
-            if st.button("Update Quantity"):
-                update_stock(item, new_qty)
-                st.success(f"✅ Updated '{item}' quantity to {new_qty}.")
-
-# -------------------------------
-# DELETE ITEM (Admin Only)
-# -------------------------------
-elif menu == "Delete Item":
-    if role != "Admin":
-        st.warning("⚠️ Only Admin can delete items.")
-    else:
-        st.subheader("Delete Item")
-        items = df["Item"].tolist()
-        if len(items) == 0:
-            st.info("No items found to delete.")
-        else:
-            item_to_delete = st.selectbox("Select Item to Delete", items)
-            if st.button("Delete Item"):
-                delete_item(item_to_delete)
-                st.success(f"✅ '{item_to_delete}' has been deleted.")
-
-# -------------------------------
-# LOW STOCK REPORT
-# -------------------------------
-elif menu == "Low Stock Report":
-    st.subheader("⚠️ Low Stock Items")
-    low_stock = df_filtered[df_filtered["Quantity"] <= df_filtered["Reorder_Level"]]
-
-    if low_stock.empty:
-        st.success("🎉 All items are sufficiently stocked.")
-    else:
-        # Calculate "Need to Order" quantity
-        low_stock["Need_to_Order"] = low_stock["Reorder_Level"] - low_stock["Quantity"]
-
-        # Table without Category
-        st.dataframe(low_stock.drop(columns=["Category"]))
-
-        # CSV download without Category
-        csv_data = low_stock.drop(columns=["Category"]).to_csv(index=False).encode("utf-8")
-        st.download_button("⬇️ Download Low Stock List (CSV)", data=csv_data, file_name="low_stock_items.csv")
-
-        # Text area without Category, showing how much to order
-        list_text = "\n".join([f"{r.Item}: {r.Need_to_Order}" for r in low_stock.itertuples()])
-        st.text_area("Low Stock Order List (for easy copy)", value=list_text, height=200)
+st.download_button("⬇️ Download Full Inventory (CSV)", data=df.to_csv(index=False), file_name="inventory_backup.csv")
