@@ -3,6 +3,8 @@ import pandas as pd
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
+import streamlit as st
+st.write("Secrets available:", list(st.secrets.keys()))
 st.write("✅ Connected to:", st.secrets["SHEET_URL"])
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Inventory App", layout="wide")
